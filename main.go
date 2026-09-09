@@ -15,27 +15,50 @@ func main() {
 	}
 	defer file.Close()
 
-	buffer := make([]byte, 8)
-	current := ""
-	for {
-		n, err := file.Read(buffer)
-		if n > 0 {
-			splits := strings.Split(string(buffer[:n]), "\n")
-			for i := 0; i < len(splits)-1; i++ {
-				fmt.Printf("read: %s\n", current+splits[i])
+	ch := lines(file)
+
+	for line := range ch {
+		fmt.Printf("read: %s\n", line)
+	}
+}
+
+func lines(f io.ReadCloser) <-chan string {
+	ch := make(chan string)
+
+	go func() {
+		defer f.Close()
+		defer close(ch)
+
+		buffer := make([]byte, 8)
+		current := ""
+
+		for {
+			n, err := f.Read(buffer)
+			// read can return both n and err at once
+			if n > 0 {
+				// [:n] to use the bytes that were actually read, not the full buffer
+				splits := strings.Split(string(buffer[:n]), "\n")
+				splits[0] = current + splits[0]
 				current = ""
-			}
-			current += splits[len(splits)-1]
-		}
-		if err != nil {
-			if errors.Is(io.EOF, err) {
-				break
+
+				for i := 0; i < len(splits)-1; i++ {
+					ch <- splits[i]
+				}
+				current = splits[len(splits)-1]
 			}
 
-			panic(err)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				panic(err)
+			}
 		}
-	}
-	if len(current) > 0 {
-		fmt.Printf("read: %s\n", current)
-	}
+
+		if len(current) > 0 {
+			ch <- current
+		}
+	}()
+
+	return ch
 }
