@@ -1,5 +1,10 @@
 default: 
 	@just --list
 
-run:
-	go run main.go
+alias run := tcp
+
+tcp:
+	go run cmd/tcp/main.go
+
+udp:
+	go run cmd/udp/main.go
