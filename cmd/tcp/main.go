@@ -1,11 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"net"
-	"strings"
+
+	"github.com/lulzshadowwalker/http/internal/request"
 )
 
 func main() {
@@ -18,7 +17,7 @@ func main() {
 	fmt.Printf("listening on :42069\n")
 
 	for {
-		connection, err := listener.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Printf("failed to accept tcp connection: %s\n", err)
 			continue
@@ -26,51 +25,14 @@ func main() {
 
 		fmt.Printf("accepted tcp connection\n")
 
-		ch := lines(connection)
-
-		for line := range ch {
-			fmt.Printf("read: %s\n", line)
+		r, err := request.RequestFromReader(conn)
+		if err != nil {
+			panic(err)
 		}
+
+		fmt.Printf("Request line:\n")
+		fmt.Printf("- Method: %s\n", r.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", r.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", r.RequestLine.HTTPVersion)
 	}
-}
-
-func lines(f io.ReadCloser) <-chan string {
-	ch := make(chan string)
-
-	go func() {
-		defer f.Close()
-		defer close(ch)
-
-		buffer := make([]byte, 8)
-		current := ""
-
-		for {
-			n, err := f.Read(buffer)
-			// read can return both n and err at once
-			if n > 0 {
-				// [:n] to use the bytes that were actually read, not the full buffer
-				splits := strings.Split(string(buffer[:n]), "\n")
-				splits[0] = current + splits[0]
-				current = ""
-
-				for i := 0; i < len(splits)-1; i++ {
-					ch <- splits[i]
-				}
-				current = splits[len(splits)-1]
-			}
-
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				panic(err)
-			}
-		}
-
-		if len(current) > 0 {
-			ch <- current
-		}
-	}()
-
-	return ch
 }
