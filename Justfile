@@ -8,3 +8,6 @@ tcp:
 
 udp:
 	go run cmd/udp/main.go
+
+test:
+	go test ./...
