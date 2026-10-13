@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/lulzshadowwalker/http/internal/headers"
 )
+
+var ErrInvalidBody = errors.New("invalid body")
 
 const bufferSize = 4096
 
@@ -18,6 +21,7 @@ type State string
 const (
 	StateInit           State = "initialized"
 	StateParsingHeaders State = "parsing_headers"
+	StateParsingBody    State = "parsing_body"
 	StateDone           State = "done"
 )
 
@@ -26,6 +30,7 @@ type Request struct {
 
 	// a.k.a field lines
 	Headers headers.Headers
+	Body    []byte
 	State   State
 }
 
@@ -33,6 +38,7 @@ func NewRequest() *Request {
 	return &Request{
 		State:   StateInit,
 		Headers: headers.NewHeaders(),
+		Body: make([]byte, 0),
 	}
 }
 
@@ -116,10 +122,36 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		if done {
-			r.State = StateDone
+			r.State = StateParsingBody
 		}
 
 		return n, nil
+
+	case StateParsingBody:
+		val, ok := r.Headers.Get("content-length")
+		if !ok {
+			// i.e. there is no body
+			r.State = StateDone
+			return 0, nil
+		}
+
+		length, err := strconv.Atoi(val)
+		if err != nil{
+			return 0, errors.New("invalid content-length header")
+		}
+
+
+		if len(r.Body) + len(data) > length {
+			return 0, ErrInvalidBody
+		}
+
+		r.Body = append(r.Body, []byte(data)...)
+
+		if len(r.Body) == length {
+			r.State = StateDone
+		}
+
+		return len(data), nil
 	default:
 		return 0, fmt.Errorf("unrecognized request state %q", r.State)
 	}

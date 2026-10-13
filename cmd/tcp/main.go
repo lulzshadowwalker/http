@@ -27,7 +27,8 @@ func main() {
 
 		r, err := request.RequestFromReader(conn)
 		if err != nil {
-			panic(err)
+			fmt.Printf("failed to read request: %q", err)
+			continue
 		}
 
 		fmt.Printf("Request line:\n")
@@ -40,5 +41,7 @@ func main() {
 			fmt.Printf("%s: %s\n", key, val)
 		}
 
+		fmt.Printf("Body:\n")
+		fmt.Printf("%s\n", string(r.Body))
 	}
 }
