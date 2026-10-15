@@ -12,6 +12,8 @@ import (
 	"github.com/lulzshadowwalker/http/internal/headers"
 )
 
+// TODO: As an experiment, try refactoring to use bufio.Reader
+
 var ErrInvalidBody = errors.New("invalid body")
 
 const bufferSize = 4096
@@ -60,6 +62,10 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			copy(buffer, buffer[n:buffered])
 			buffered -= n
 			continue // there is still more data ready for parsing
+		}
+
+		if request.State == StateDone {
+			break
 		}
 
 		if buffered == len(buffer) {
@@ -117,12 +123,12 @@ func (r *Request) parse(data []byte) (int, error) {
 			return 0, err
 		}
 
-		if n == 0 {
-			return 0, nil
-		}
-
 		if done {
 			r.State = StateParsingBody
+		}
+
+		if n == 0 {
+			return 0, nil
 		}
 
 		return n, nil
@@ -139,7 +145,6 @@ func (r *Request) parse(data []byte) (int, error) {
 		if err != nil{
 			return 0, errors.New("invalid content-length header")
 		}
-
 
 		if len(r.Body) + len(data) > length {
 			return 0, ErrInvalidBody

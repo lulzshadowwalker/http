@@ -1,7 +1,10 @@
 default: 
 	@just --list
 
-alias run := tcp
+alias run := http
+
+http:
+	go run cmd/http/main.go
 
 tcp:
 	go run cmd/tcp/main.go

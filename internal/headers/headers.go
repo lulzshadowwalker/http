@@ -28,6 +28,16 @@ func NewKey(s string) (Key, error) {
 	return Key(strings.ToLower(s)), nil
 }
 
+func (h Headers) Set(key, val string) error {
+	k, err := NewKey(key)
+	if err != nil {
+		return err
+	}
+
+	h[k] = val
+	return nil
+}
+
 // Parse parses one field-line (header) at a time
 func (h Headers) Parse(data []byte) (int, bool, error) {
 	crlf := bytes.Index(data, []byte("\r\n"))
