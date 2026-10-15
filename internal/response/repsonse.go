@@ -49,8 +49,51 @@ func (w *Writer) WriteHeaders(h headers.Headers) error {
 	return err
 }
 
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	for k, v := range h {
+		if _, err := fmt.Fprintf(w.w, "%s: %s\r\n", k, v); err != nil {
+			return err
+		}
+	}
+	_, err := w.w.Write([]byte("\r\n"))
+	return err
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	return w.w.Write([]byte("0\r\n"))
+}
+
 func (w *Writer) WriteBody(data []byte) (int, error) {
 	return w.w.Write(data)
+}
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	chunk := fmt.Appendf(nil, "%x\r\n", len(p))
+	chunk = append(chunk, p...)
+	chunk = append(chunk, '\r', '\n')
+
+	if _, err := w.w.Write(chunk); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func GetChunkedHeaders() headers.Headers {
+	h := headers.NewHeaders()
+	for k, v := range map[string]string{
+		"transfer-encoding": "chunked",
+		"connection":        "close",
+		"content-type":      "application/json",
+	} {
+		if err := h.Set(k, v); err != nil {
+			panic(err)
+		}
+	}
+	return h
 }
 
 func GetDefaultHeaders(contentLength int) headers.Headers {

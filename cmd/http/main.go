@@ -1,11 +1,18 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
+	nethttp "net/http"
+
+	"github.com/lulzshadowwalker/http/internal/headers"
 	"github.com/lulzshadowwalker/http/internal/http"
 	"github.com/lulzshadowwalker/http/internal/request"
 	"github.com/lulzshadowwalker/http/internal/response"
@@ -15,6 +22,50 @@ const addr = ":8000"
 
 func main() {
 	s, err := http.Listen(addr, func(w response.Writer, r *request.Request) *http.HandlerError {
+		target := r.RequestLine.RequestTarget
+		if strings.HasPrefix(target, "/httpbin/") {
+			path := strings.TrimPrefix(target, "/httpbin")
+			res, err := nethttp.Get("https://httpbingo.org" + path)
+			if err != nil {
+				return &http.HandlerError{
+					Status:  response.StatusInternalServerError,
+					Message: "internal server error",
+				}
+			}
+			defer res.Body.Close()
+
+			w.WriteStatusLine(response.StatusOK)
+
+			h := response.GetChunkedHeaders()
+			h.Set("Trailer", "X-Content-SHA256, X-Content-Length")
+			w.WriteHeaders(h)
+
+			buf := make([]byte, 1024)
+			var full []byte
+			for {
+				n, err := res.Body.Read(buf)
+				if n > 0 {
+					full = append(full, buf[:n]...)
+
+					if _, err := w.WriteChunkedBody(buf[:n]); err != nil {
+						return nil
+					}
+				}
+				if err != nil {
+					break // io.EOF or a read error: either way, we're done
+				}
+			}
+
+			w.WriteChunkedBodyDone()
+
+			sum := sha256.Sum256(full)
+			trailers := headers.NewHeaders()
+			trailers.Set("X-Content-SHA256", fmt.Sprintf("%x", sum))
+			trailers.Set("X-Content-Length", strconv.Itoa(len(full)))
+			w.WriteTrailers(trailers)
+			return nil
+		}
+
 		switch r.RequestLine.RequestTarget {
 		case "/400":
 			content := `<html>
