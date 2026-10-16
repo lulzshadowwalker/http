@@ -67,6 +67,39 @@ func main() {
 		}
 
 		switch r.RequestLine.RequestTarget {
+		case "/video":
+			w.WriteStatusLine(200)
+			h := response.GetChunkedHeaders()
+			h.Set("content-type", "video/mp4")
+			w.WriteHeaders(h)
+
+			f, err := os.Open("assets/vim.mp4")
+			if err != nil {
+				return &http.HandlerError{
+					Status: 500,
+					Message: "internal server error",
+				}
+			}
+			defer f.Close()
+			
+			buf := make([]byte, 4096)
+			var full []byte
+			for {
+				n, err := f.Read(buf)
+				if n > 0 {
+					full = append(full, buf[:n]...)
+
+					if _, err := w.WriteChunkedBody(buf[:n]); err != nil {
+						return nil
+					}
+				}
+				if err != nil {
+					break // io.EOF or a read error: either way, we're done
+				}
+			}
+
+			w.WriteChunkedBodyDone()
+			w.WriteBody([]byte("\r\n"))
 		case "/400":
 			content := `<html>
   <head>
